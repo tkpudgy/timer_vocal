@@ -4,50 +4,96 @@
   <meta charset="UTF-8">
   <title>Race Timer Flow</title>
   <style>
-    body { font-family: sans-serif; display: flex; justify-content: center; padding: 2rem; }
+    body { font-family: sans-serif; display: flex; justify-content: center; padding: 2rem; font-size: 1.5rem; }
     .flow-container { display: flex; flex-direction: column; align-items: center; max-width: 300px; width: 100%; }
-    .flow-step { margin: 0.5rem 0; text-align: center; width: 100%; }
-    .flow-step label { display: block; font-size: 1rem; }
-    .flow-step input { width: 100%; padding: 0.5rem; font-size: 1rem; box-sizing: border-box; margin-top: 0.25rem; }
-    .arrow { font-size: 1.5rem; line-height: 1; }
-    .text { font-weight: bold; font-size: 1.1rem; }
-    button { font-size: 1rem; padding: 0.5rem 1rem; margin: 0.5rem; }
-    h1 { font-size: 3rem; margin-top: 1.5rem; }
+    .flow-step { margin: 0.75rem 0; text-align: center; width: 100%; }
+    .small-step label { display: block; font-size: 0.75rem; }
+    .small-step input { width: 100%; padding: 0.375rem; font-size: 0.75rem; box-sizing: border-box; margin-top: 0.125rem; }
+    .flow-step label { display: block; font-size: 1.5rem; }
+    .flow-step input { width: 100%; padding: 0.75rem; font-size: 1.5rem; box-sizing: border-box; margin-top: 0.375rem; }
+    .arrow { font-size: 2.25rem; line-height: 1; margin: 0.5rem 0; }
+    .text { font-weight: bold; font-size: 1.65rem; }
+    button { font-size: 1.5rem; padding: 0.75rem 1.5rem; margin: 0.75rem; }
+    h1 { font-size: 4.5rem; margin-top: 2.25rem; }
   </style>
 </head>
 <body>
   <div class="flow-container">
+    <!-- Speech rate input at top -->
+    <div class="flow-step small-step">
+      <label for="rate">Speech Rate (1–5):</label>
+      <input id="rate" type="number" value="4" min="1" max="5" step="0.1">
+    </div>
+    
+    <!-- Start label with arrow to Prep -->
     <div class="flow-step text">Start</div>
     <div class="arrow">↓</div>
-    <div class="flow-step"><label for="prep">Prep Time (s)</label><input id="prep" type="number" value="5" min="1"></div>
+
+    <!-- Prep Time -->
+    <div class="flow-step">
+      <label for="prep">Prep Time (s)</label>
+      <input id="prep" type="number" value="5" min="1">
+    </div>
     <div class="arrow">↓</div>
+
+    <!-- On your marks -->
     <div class="flow-step text">On your marks</div>
     <div class="arrow">↓</div>
-    <div class="flow-step"><label for="ready">Ready Time (s)</label><input id="ready" type="number" value="5" min="1"></div>
+
+    <!-- Ready Time -->
+    <div class="flow-step">
+      <label for="ready">Ready Time (s)</label>
+      <input id="ready" type="number" value="5" min="1">
+    </div>
     <div class="arrow">↓</div>
+
+    <!-- Set -->
     <div class="flow-step text">Set</div>
     <div class="arrow">↓</div>
-    <div class="flow-step"><label for="minDelay">Min Delay (s)</label><input id="minDelay" type="number" value="1" min="0"></div>
+
+    <!-- Random Delay Min/Max -->
+    <div class="flow-step">
+      <label for="minDelay">Min Delay (s)</label>
+      <input id="minDelay" type="number" value="1" min="0">
+    </div>
     <div class="arrow">↓</div>
-    <div class="flow-step"><label for="maxDelay">Max Delay (s)</label><input id="maxDelay" type="number" value="3" min="0"></div>
+    <div class="flow-step">
+      <label for="maxDelay">Max Delay (s)</label>
+      <input id="maxDelay" type="number" value="3" min="0">
+    </div>
     <div class="arrow">↓</div>
+
+    <!-- Go -->
     <div class="flow-step text">Go</div>
     <div class="arrow">↓</div>
-    <div class="flow-step"><label for="duration">Stopwatch Duration (s)</label><input id="duration" type="number" value="30" min="1"></div>
-    <div class="flow-step"><button id="start">Start</button><button id="stop" disabled>Stop</button></div>
+
+    <!-- Stopwatch Duration -->
+    <div class="flow-step">
+      <label for="duration">Stopwatch Duration (s)</label>
+      <input id="duration" type="number" value="30" min="1">
+    </div>
+
+    <!-- Buttons -->
+    <div class="flow-step">
+      <button id="start">Start</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+
+    <!-- Display -->
     <h1 id="display">00:00:00</h1>
   </div>
+
   <script>
-    // Pre-create AudioContext and warm up voices
     let audioCtx;
+    let wakeLock = null;
+
+    // Create AudioContext and warm up TTS
     window.addEventListener('load', () => {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       speechSynthesis.getVoices();
     });
 
-    let prepInterval, randomTimer, stopwatchTimer;
-    let startTime, lastSecond, durationSeconds;
-
+    const rateInput = document.getElementById('rate');
     const display = document.getElementById('display');
     const startBtn = document.getElementById('start');
     const stopBtn = document.getElementById('stop');
@@ -57,31 +103,47 @@
     const maxDelayInput = document.getElementById('maxDelay');
     const durationInput = document.getElementById('duration');
 
+    let prepInterval, randomTimer, stopwatchTimer;
+    let startTime, lastSecond, durationSeconds;
+
+    function getRate() {
+      let r = parseFloat(rateInput.value);
+      if (isNaN(r)) r = 4;
+      return Math.min(5, Math.max(1, r));
+    }
+
     function formatTime(h, m, s) {
       return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
     }
 
-    // Use for command utterances (no cancel)
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+        } catch (err) {
+          console.warn('Wake Lock error:', err);
+        }
+      }
+    }
+
+    async function releaseWakeLock() {
+      if (wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+      }
+    }
+
     function speakText(txt) {
       const msg = new SpeechSynthesisUtterance(txt);
-      msg.rate = 4.0; // increased rate
+      msg.rate = getRate();
       speechSynthesis.speak(msg);
     }
 
-    // Speak numbers, clearing any queued utterances to avoid backlog
     function speakNumber(txt) {
       speechSynthesis.cancel();
       const msg = new SpeechSynthesisUtterance(txt);
-      msg.rate = 4.0; // increased rate
+      msg.rate = getRate();
       speechSynthesis.speak(msg);
-    }
-
-    function beep(duration = 200) {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const osc = audioCtx.createOscillator();
-      osc.connect(audioCtx.destination);
-      osc.start();
-      setTimeout(() => osc.stop(), duration);
     }
 
     function countdown(seconds, onDone) {
@@ -105,7 +167,6 @@
       const delay = Math.floor(Math.random() * (max - min + 1)) + min;
       display.textContent = '…';
       randomTimer = setTimeout(() => {
-        beep(400);
         speakText('Go');
         startStopwatch();
       }, delay * 1000);
@@ -125,6 +186,7 @@
           clearTimeout(stopwatchTimer);
           stopBtn.disabled = true;
           startBtn.disabled = false;
+          releaseWakeLock();
           return;
         }
       }
@@ -139,18 +201,20 @@
       scheduleTick();
     }
 
-    startBtn.addEventListener('click', () => {
+    startBtn.addEventListener('click', async () => {
+      await requestWakeLock();
       speakText('Get ready');
       startBtn.disabled = true;
       stopBtn.disabled = false;
       runPrep();
     });
 
-    stopBtn.addEventListener('click', () => {
+    stopBtn.addEventListener('click', async () => {
       clearInterval(prepInterval);
       clearTimeout(randomTimer);
       clearTimeout(stopwatchTimer);
       speechSynthesis.cancel();
+      await releaseWakeLock();
       startBtn.disabled = false;
       stopBtn.disabled = true;
     });
