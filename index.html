@@ -22,7 +22,7 @@
     <!-- Speech rate input at top -->
     <div class="flow-step small-step">
       <label for="rate">Speech Rate (1–5):</label>
-      <input id="rate" type="number" value="4" min="1" max="5" step="0.1">
+      <input id="rate" type="number" value="1.2" min="1" max="5" step="0.1">
     </div>
     
     <!-- Start label with arrow to Prep -->
@@ -32,7 +32,7 @@
     <!-- Prep Time -->
     <div class="flow-step">
       <label for="prep">Prep Time (s)</label>
-      <input id="prep" type="number" value="5" min="1">
+      <input id="prep" type="number" value="10" min="1">
     </div>
     <div class="arrow">↓</div>
 
@@ -54,12 +54,12 @@
     <!-- Random Delay Min/Max -->
     <div class="flow-step">
       <label for="minDelay">Min Delay (s)</label>
-      <input id="minDelay" type="number" value="1" min="0">
+      <input id="minDelay" type="number" value="2" min="0">
     </div>
     <div class="arrow">↓</div>
     <div class="flow-step">
       <label for="maxDelay">Max Delay (s)</label>
-      <input id="maxDelay" type="number" value="3" min="0">
+      <input id="maxDelay" type="number" value="4" min="0">
     </div>
     <div class="arrow">↓</div>
 
@@ -70,7 +70,7 @@
     <!-- Stopwatch Duration -->
     <div class="flow-step">
       <label for="duration">Stopwatch Duration (s)</label>
-      <input id="duration" type="number" value="30" min="1">
+      <input id="duration" type="number" value="70" min="1">
     </div>
 
     <!-- Buttons -->
@@ -108,7 +108,7 @@
 
     function getRate() {
       let r = parseFloat(rateInput.value);
-      if (isNaN(r)) r = 4;
+      if (isNaN(r)) r = 1.2;
       return Math.min(5, Math.max(1, r));
     }
 
@@ -156,14 +156,14 @@
       }, 1000);
     }
 
-    function runPrep() { countdown(parseInt(prepInput.value, 10) || 5, onPrepDone); }
+    function runPrep() { countdown(parseInt(prepInput.value, 10) || 10, onPrepDone); }
     function onPrepDone() { speakText('On your marks'); runReady(); }
     function runReady() { countdown(parseInt(readyInput.value, 10) || 5, onReadyDone); }
     function onReadyDone() { speakText('Set'); runRandomDelay(); }
 
     function runRandomDelay() {
-      const min = parseInt(minDelayInput.value, 10) || 1;
-      const max = parseInt(maxDelayInput.value, 10) || 3;
+      const min = parseInt(minDelayInput.value, 10) || 2;
+      const max = parseInt(maxDelayInput.value, 10) || 4;
       const delay = Math.floor(Math.random() * (max - min + 1)) + min;
       display.textContent = '…';
       randomTimer = setTimeout(() => {
@@ -195,7 +195,7 @@
     }
 
     function startStopwatch() {
-      durationSeconds = parseInt(durationInput.value, 10) || 30;
+      durationSeconds = parseInt(durationInput.value, 10) || 70;
       startTime = performance.now();
       lastSecond = -1;
       scheduleTick();
