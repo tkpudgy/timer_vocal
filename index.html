@@ -201,9 +201,9 @@
       scheduleTick();
     }
 
-    startBtn.addEventListener('click', async () => {
-      await requestWakeLock();
+    startBtn.addEventListener('click', () => {
       speakText('Get ready');
+      requestWakeLock();
       startBtn.disabled = true;
       stopBtn.disabled = false;
       runPrep();
