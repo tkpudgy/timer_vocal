@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Race Timer Flow</title>
+  <style>
+    body { font-family: sans-serif; display: flex; justify-content: center; padding: 2rem; }
+    .flow-container { display: flex; flex-direction: column; align-items: center; max-width: 300px; width: 100%; }
+    .flow-step { margin: 0.5rem 0; text-align: center; width: 100%; }
+    .flow-step label { display: block; font-size: 1rem; }
+    .flow-step input { width: 100%; padding: 0.5rem; font-size: 1rem; box-sizing: border-box; margin-top: 0.25rem; }
+    .arrow { font-size: 1.5rem; line-height: 1; }
+    .text { font-weight: bold; font-size: 1.1rem; }
+    button { font-size: 1rem; padding: 0.5rem 1rem; margin: 0.5rem; }
+    h1 { font-size: 3rem; margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="flow-container">
+    <div class="flow-step text">Start</div>
+    <div class="arrow">↓</div>
+    <div class="flow-step"><label for="prep">Prep Time (s)</label><input id="prep" type="number" value="5" min="1"></div>
+    <div class="arrow">↓</div>
+    <div class="flow-step text">On your marks</div>
+    <div class="arrow">↓</div>
+    <div class="flow-step"><label for="ready">Ready Time (s)</label><input id="ready" type="number" value="5" min="1"></div>
+    <div class="arrow">↓</div>
+    <div class="flow-step text">Set</div>
+    <div class="arrow">↓</div>
+    <div class="flow-step"><label for="minDelay">Min Delay (s)</label><input id="minDelay" type="number" value="1" min="0"></div>
+    <div class="arrow">↓</div>
+    <div class="flow-step"><label for="maxDelay">Max Delay (s)</label><input id="maxDelay" type="number" value="3" min="0"></div>
+    <div class="arrow">↓</div>
+    <div class="flow-step text">Go</div>
+    <div class="arrow">↓</div>
+    <div class="flow-step"><label for="duration">Stopwatch Duration (s)</label><input id="duration" type="number" value="30" min="1"></div>
+    <div class="flow-step"><button id="start">Start</button><button id="stop" disabled>Stop</button></div>
+    <h1 id="display">00:00:00</h1>
+  </div>
+  <script>
+    // Pre-create AudioContext and warm up voices
+    let audioCtx;
+    window.addEventListener('load', () => {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      speechSynthesis.getVoices();
+    });
+
+    let prepInterval, randomTimer, stopwatchTimer;
+    let startTime, lastSecond, durationSeconds;
+
+    const display = document.getElementById('display');
+    const startBtn = document.getElementById('start');
+    const stopBtn = document.getElementById('stop');
+    const prepInput = document.getElementById('prep');
+    const readyInput = document.getElementById('ready');
+    const minDelayInput = document.getElementById('minDelay');
+    const maxDelayInput = document.getElementById('maxDelay');
+    const durationInput = document.getElementById('duration');
+
+    function formatTime(h, m, s) {
+      return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
+    }
+
+    // Use for command utterances (no cancel)
+    function speakText(txt) {
+      const msg = new SpeechSynthesisUtterance(txt);
+      msg.rate = 4.0; // increased rate
+      speechSynthesis.speak(msg);
+    }
+
+    // Speak numbers, clearing any queued utterances to avoid backlog
+    function speakNumber(txt) {
+      speechSynthesis.cancel();
+      const msg = new SpeechSynthesisUtterance(txt);
+      msg.rate = 4.0; // increased rate
+      speechSynthesis.speak(msg);
+    }
+
+    function beep(duration = 200) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      osc.connect(audioCtx.destination);
+      osc.start();
+      setTimeout(() => osc.stop(), duration);
+    }
+
+    function countdown(seconds, onDone) {
+      let count = seconds;
+      display.textContent = formatTime(0, 0, count);
+      prepInterval = setInterval(() => {
+        count--;
+        display.textContent = formatTime(0, 0, count);
+        if (count <= 0) { clearInterval(prepInterval); onDone(); }
+      }, 1000);
+    }
+
+    function runPrep() { countdown(parseInt(prepInput.value, 10) || 5, onPrepDone); }
+    function onPrepDone() { speakText('On your marks'); runReady(); }
+    function runReady() { countdown(parseInt(readyInput.value, 10) || 5, onReadyDone); }
+    function onReadyDone() { speakText('Set'); runRandomDelay(); }
+
+    function runRandomDelay() {
+      const min = parseInt(minDelayInput.value, 10) || 1;
+      const max = parseInt(maxDelayInput.value, 10) || 3;
+      const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+      display.textContent = '…';
+      randomTimer = setTimeout(() => {
+        beep(400);
+        speakText('Go');
+        startStopwatch();
+      }, delay * 1000);
+    }
+
+    function scheduleTick() {
+      const now = performance.now();
+      const elapsed = Math.floor((now - startTime) / 1000);
+      if (elapsed !== lastSecond) {
+        lastSecond = elapsed;
+        const h = Math.floor(elapsed / 3600);
+        const m = Math.floor((elapsed % 3600) / 60);
+        const s = elapsed % 60;
+        display.textContent = formatTime(h, m, s);
+        if (elapsed > 0) speakNumber(String(elapsed));
+        if (elapsed >= durationSeconds) {
+          clearTimeout(stopwatchTimer);
+          stopBtn.disabled = true;
+          startBtn.disabled = false;
+          return;
+        }
+      }
+      const drift = (now - startTime) - (lastSecond * 1000);
+      stopwatchTimer = setTimeout(scheduleTick, 1000 - drift);
+    }
+
+    function startStopwatch() {
+      durationSeconds = parseInt(durationInput.value, 10) || 30;
+      startTime = performance.now();
+      lastSecond = -1;
+      scheduleTick();
+    }
+
+    startBtn.addEventListener('click', () => {
+      speakText('Get ready');
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      runPrep();
+    });
+
+    stopBtn.addEventListener('click', () => {
+      clearInterval(prepInterval);
+      clearTimeout(randomTimer);
+      clearTimeout(stopwatchTimer);
+      speechSynthesis.cancel();
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    });
+  </script>
+</body>
+</html>
